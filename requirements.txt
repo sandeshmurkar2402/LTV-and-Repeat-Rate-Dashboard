@@ -1,0 +1,7 @@
+streamlit>=1.44
+pandas
+numpy
+gspread
+google-auth
+plotly
+matplotlib

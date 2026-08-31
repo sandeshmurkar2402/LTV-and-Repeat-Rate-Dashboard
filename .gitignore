@@ -1,0 +1,9 @@
+cred1.json
+.streamlit/secrets.toml
+__pycache__/
+*.pyc
+.venv/
+venv/
+scratch_*.py
+streamlit_log.txt
+.claude/
