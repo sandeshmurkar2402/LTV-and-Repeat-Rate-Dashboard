@@ -1,3 +1,5 @@
+import html
+
 import numpy as np
 import pandas as pd
 import streamlit as st
@@ -1554,7 +1556,7 @@ st.caption(
 )
 
 # ---------------------------------------------------------------- Tabs row ---
-COHORT_TABS = {"Revenue", "Users", "Purchases", "AOV", "ARPU"}
+COHORT_TABS = {"Repeat Rate"}
 PERIOD_METRIC_TABS = {
     "Session Month": {
         "Overall": "Session_Month_Rev",
@@ -1582,13 +1584,13 @@ PERIOD_METRIC_VIEWS = [
 # 'All' meaning "don't fix it — show contribution to the overall total") and break
 # down by the other, instead of filtering both to a multi-select.
 CONTRIBUTION_VIEWS = {"BL Contribution to Platform", "Platform Contribution to BL"}
-TAB_NAMES = ["LTV", "Revenue", "Users", "Purchases", "AOV", "ARPU", "Recency", "Session Month", "Purchase Month"]
+TAB_NAMES = ["LTV", "Repeat Rate", "Recency", "Session Month", "Purchase Month", "User Guide"]
 with st.container(key="tab_nav"):
     active_tab = st.segmented_control(
-        "Section", TAB_NAMES, default="Revenue", key="active_tab", label_visibility="collapsed"
+        "Section", TAB_NAMES, default="Repeat Rate", key="active_tab", label_visibility="collapsed"
     )
 if active_tab is None:
-    active_tab = "Revenue"
+    active_tab = "Repeat Rate"
 
 # --------------------------------------------------------- Month range setup ---
 # Computed up front (rather than after the tab-specific filters, as before) so
@@ -1654,6 +1656,7 @@ filtered = pd.DataFrame()
 recency_filtered = pd.DataFrame()
 period_metric_filtered = pd.DataFrame()
 view_mode = "Repeat Rate %"
+cohort_value_type = "Revenue"
 recency_value_type = "Revenue"
 recency_mode = "% of Total"
 period_metric_view = "Overall"
@@ -1693,27 +1696,28 @@ if active_tab in COHORT_TABS:
     if _peek_metric not in metric_options:
         _peek_metric = default_metric
     _peek_active_dims, _ = dp.get_active_dimension_filters(repeat_df, _peek_metric)
-    _n_dim_slots = max(1, min(4, len(_peek_active_dims)))
-    if _n_dim_slots <= 2:
-        # Original (pre-3/4-level) proportions, unchanged.
-        _col_ratios = [1.6] + [1.1] * _n_dim_slots + [1.3, 1.5]
-    else:
-        # 3-4 dim metrics (currently only Platforwise_Acq_BL_Repeat_Rate) —
-        # dim chips only ever show "All"/"N selected", so they stay compact;
-        # Mode/Month get a bit more than the 2-dim case since there's more
-        # total row content, keeping "Repeat Rate %" on one line.
-        _col_ratios = [1.3] + [0.75] * _n_dim_slots + [1.5, 1.4]
+    # 0 dim slots now allowed (not floored to 1) — "Overall" has no active
+    # dimension at all, and reserving an empty column for it wasted width the
+    # 5-pill Value picker needs. One formula for every dim count (0-4): tuned
+    # against the tightest case (4 dims, Cross Sales (Platform x Acq BL)) so
+    # Value (5 pills) and Mode ("Repeat Rate %") both stay on one line there;
+    # every other metric has fewer dims and so strictly more room to spare.
+    _n_dim_slots = max(0, min(4, len(_peek_active_dims)))
+    _col_ratios = [1.45] + [0.47] * _n_dim_slots + [2.25, 1.4, 1.0]
     _cohort_filter_cols = st.columns(_col_ratios)
-    metric_col, mode_col, month_col = _cohort_filter_cols[0], _cohort_filter_cols[-2], _cohort_filter_cols[-1]
-    dim_slot_cols = _cohort_filter_cols[1:-2]
+    metric_col, value_col, mode_col, month_col = (
+        _cohort_filter_cols[0], _cohort_filter_cols[-3], _cohort_filter_cols[-2], _cohort_filter_cols[-1]
+    )
+    dim_slot_cols = _cohort_filter_cols[1:-3]
 
     with metric_col:
-        # Shared across Revenue/Users/Purchases/AOV on purpose (same state_key
-        # regardless of active_tab) so picking a metric on one keeps it in sync
-        # across the others — same intent the old auto-keyed selectbox had, but
-        # immune to resetting back to the default when navigating to a non-cohort
-        # tab and back (that tab's branch never reaches this line, which is
-        # exactly the condition that previously caused the reset).
+        # Shared across every Value type on purpose (same state_key regardless
+        # of which Value is picked) so choosing a metric keeps it in sync
+        # across Revenue/Users/Purchases/AOV/ARPU — same intent the old
+        # auto-keyed selectbox had, but immune to resetting back to the
+        # default when navigating to a non-cohort tab and back (that tab's
+        # branch never reaches this line, which is exactly the condition that
+        # previously caused the reset).
         metric = persistent_selectbox(
             "View", metric_options, state_key="cohort_metric", default=default_metric,
             format_func=lambda m: dp.METRIC_LABELS.get(m, m),
@@ -1785,7 +1789,20 @@ if active_tab in COHORT_TABS:
     # primary-category's own sub-row inside the outline table.
     secondary_selections = {c: v for c, v in selections.items() if c != cohort_primary_dim}
 
-    show_toggle = active_tab not in ("AOV", "ARPU")
+    with value_col:
+        # Revenue/Users/Purchases/AOV/ARPU used to be 5 separate top-level
+        # tabs, but they're all just different cells of the exact same
+        # repeat-rate cohort table (same View dropdown, same dimension
+        # filters) — picking the Value here instead keeps that one shared
+        # table's controls consistent with how Session Month/Purchase Month
+        # already let you pick Revenue/Users/Purchases/AOV/ARPU as a Value,
+        # rather than duplicating the whole tab per metric.
+        cohort_value_type = persistent_segmented_control(
+            "Value", ["Revenue", "Users", "Purchases", "AOV", "ARPU"], state_key="cohort_value_type",
+            default="Revenue", label_visibility="collapsed",
+        )
+
+    show_toggle = cohort_value_type not in ("AOV", "ARPU")
     if show_toggle:
         with mode_col:
             with st.container(key="mode_toggle"):
@@ -1795,6 +1812,9 @@ if active_tab in COHORT_TABS:
                     help="Repeat Rate % divides each M0-M12+ cohort value by that month's New Acquisitions value.",
                 )
     from_ts, to_ts = render_month_range(month_col)
+
+elif active_tab == "User Guide":
+    from_ts, to_ts = pd.Timestamp(min(all_periods)), pd.Timestamp(max(all_periods))
 
 elif active_tab == "LTV":
     _month_row, _ltv_spacer = st.columns([1.5, 8.5])
@@ -1940,7 +1960,7 @@ elif active_tab in PERIOD_METRIC_TABS:
 
         from_ts, to_ts = render_month_range(month_col_pm)
 
-is_pct = (view_mode == "Repeat Rate %") and (active_tab not in ("AOV", "ARPU"))
+is_pct = (view_mode == "Repeat Rate %") and (cohort_value_type not in ("AOV", "ARPU"))
 recency_is_pct = recency_mode == "% of Total"
 
 # Every branch above (LTV / cohort tabs / Recency / Session-Purchase Month) sets
@@ -2567,6 +2587,122 @@ def render_contribution_tab(tab_title, value_type, component, breakdown_col, fix
     )
 
 
+
+from guide_content import GUIDE_SECTIONS
+
+GUIDE_ACCENTS = ["#4c9bff", "#2fd4a0", "#a78bfa", "#f5b942"]
+
+
+def _guide_text_html(text):
+    """Guide prose -> HTML: a line ending in ':' opens a bullet list for the
+    lines after it (until a blank line or a line starting 'The '); 'Example'
+    lines become a callout; a bullet's 'Term - explanation' lead-in is bolded."""
+    out, in_list = [], False
+    for raw in text.split("\n"):
+        line = raw.strip()
+        if not line:
+            if in_list:
+                out.append("</ul>")
+                in_list = False
+            continue
+        esc = html.escape(line)
+        if line.lower().startswith("example"):
+            if in_list:
+                out.append("</ul>")
+                in_list = False
+            out.append(f'<div class="ug-ex">{esc}</div>')
+        elif in_list and line.startswith("The "):
+            out.append("</ul>")
+            in_list = False
+            out.append(f"<p>{esc}</p>")
+        elif in_list:
+            head, sep, tail = esc.partition(" - ")
+            if sep and len(head) <= 45:
+                esc = f"<b>{head}</b> &ndash; {tail}"
+            out.append(f"<li>{esc}</li>")
+        else:
+            out.append(f"<p>{esc}</p>")
+            if line.endswith(":"):
+                out.append("<ul>")
+                in_list = True
+    if in_list:
+        out.append("</ul>")
+    return "".join(out)
+
+
+GUIDE_CSS = """<style>
+.st-key-ug_panel{background:#0d1117;border:1px solid #232a35;border-radius:16px;padding:26px 28px 64px}
+.st-key-ug_panel button{background:#161d2a!important;color:#c9d1d9!important;border:1px solid #2a3344!important;border-radius:8px!important;min-height:34px!important;font-weight:600!important}
+.st-key-ug_panel button:hover{border-color:#4c9bff!important;color:#fff!important}
+.st-key-ug_panel button p{color:inherit!important;font-size:.82rem!important}
+.ug-h1{font-size:1.5rem;font-weight:700;color:#f0f6fc;letter-spacing:-0.01em;line-height:1.2}
+.ug-sub{color:#8b98a9;margin-top:2px;font-size:.92rem}
+.ug-a0{--accent:#4c9bff;--soft:rgba(76,155,255,.20)}.ug-a1{--accent:#2fd4a0;--soft:rgba(47,212,160,.20)}
+.ug-a2{--accent:#a78bfa;--soft:rgba(167,139,250,.20)}.ug-a3{--accent:#f5b942;--soft:rgba(245,185,66,.20)}
+.ug-tab{margin-top:24px;border:1px solid var(--accent);border-radius:14px;padding:18px 24px 14px;background:linear-gradient(120deg,var(--soft) 0%,#101620 75%);box-shadow:0 8px 30px rgba(0,0,0,.35)}
+.ug-tab-name{font-size:1.4rem;font-weight:800;color:#fff;letter-spacing:-0.01em;line-height:1.2;display:flex;align-items:center;gap:12px}
+.ug-tab-name:before{content:"";width:6px;height:24px;border-radius:3px;background:var(--accent);box-shadow:0 0 12px var(--accent)}
+.ug-tab-desc{margin-top:6px;color:#d3dbe6;font-size:.95rem}
+.ug-opts-title{font-size:.74rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#8b98a9;padding-top:10px}
+.ug-opts-title span{color:var(--accent)}
+.ug-tab p,.ug-body p{margin:6px 0}
+details.ug-opt{background:#151b26;border:1px solid #252d3b;border-radius:10px;margin:0 0 8px;overflow:hidden}
+details.ug-opt[open]{border-color:var(--accent)}
+details.ug-opt summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:12px;padding:11px 16px;font-size:.95rem;font-weight:600;color:#e6edf6}
+details.ug-opt summary::-webkit-details-marker{display:none}
+details.ug-opt summary:hover{background:#1a2230}
+details.ug-opt summary:before{content:"";width:8px;height:8px;border-right:2px solid var(--accent);border-bottom:2px solid var(--accent);transform:rotate(-45deg);transition:transform .15s;flex:none}
+details.ug-opt[open] summary:before{transform:rotate(45deg)}
+.ug-body{padding:2px 20px 10px 36px;border-top:1px solid #222a37;color:#c9d1d9;font-size:.93rem}
+.ug-root-ul,.ug-tab ul,.ug-body ul{margin:6px 0 10px;padding-left:20px}
+.ug-tab li,.ug-body li{margin:4px 0;color:#b6c2d1}
+.ug-tab li::marker,.ug-body li::marker{color:var(--accent)}
+.ug-tab b,.ug-body b{color:#f0f6fc}
+.ug-ex{margin:10px 0;padding:10px 14px;background:rgba(255,255,255,.04);border-left:3px solid var(--accent);border-radius:6px;color:#dbe4ef;font-style:italic}
+</style>"""
+
+
+def _ug_set_open(indexes, value):
+    for i in indexes:
+        st.session_state[f"ug_open_{i}"] = value
+
+
+def render_user_guide():
+    st.markdown(GUIDE_CSS, unsafe_allow_html=True)
+    all_idx = [i for i, sec in enumerate(GUIDE_SECTIONS) if sec["options"]]
+    with st.container(key="ug_panel"):
+        head, b1, b2 = st.columns([6, 1.2, 1.2])
+        with head:
+            st.markdown(
+                '<div class="ug-h1">User Guide</div><div class="ug-sub">How to read the dashboard &mdash; '
+                'each main tab, and the options available inside it.</div>', unsafe_allow_html=True,
+            )
+        b1.button("Expand all", key="ug_all_open", on_click=_ug_set_open, args=(all_idx, True), use_container_width=True)
+        b2.button("Collapse all", key="ug_all_close", on_click=_ug_set_open, args=(all_idx, False), use_container_width=True)
+
+        for i, sec in enumerate(GUIDE_SECTIONS):
+            cls = f"ug-a{i % 4}"
+            st.markdown(
+                f'<div class="ug-tab {cls}"><div class="ug-tab-name">{html.escape(sec["title"])}</div>'
+                f'<div class="ug-tab-desc">{_guide_text_html(sec["intro"])}</div></div>',
+                unsafe_allow_html=True,
+            )
+            if not sec["options"]:
+                continue
+            st.markdown('<div style="height:10px"></div>', unsafe_allow_html=True)
+            t, tb1, tb2 = st.columns([6, 1.2, 1.2], vertical_alignment="center")
+            tb1.button("Expand all", key=f"ug_open_btn_{i}", on_click=_ug_set_open, args=([i], True), use_container_width=True)
+            tb2.button("Collapse all", key=f"ug_close_btn_{i}", on_click=_ug_set_open, args=([i], False), use_container_width=True)
+            is_open = " open" if st.session_state.get(f"ug_open_{i}", False) else ""
+            items = "".join(
+                f'<details class="ug-opt"{is_open}><summary>{html.escape(title)}</summary>'
+                f'<div class="ug-body">{_guide_text_html(body)}</div></details>'
+                for title, body in sec["options"]
+            )
+            st.markdown(f'<div class="{cls}">{items}</div>', unsafe_allow_html=True)
+    st.markdown('<div style="height:80px"></div>', unsafe_allow_html=True)
+
+
 # ---------------------------------------------------------------- LTV tab ---
 if active_tab == "LTV":
     st.subheader("LTV Overview")
@@ -2624,23 +2760,27 @@ if active_tab == "LTV":
                 use_container_width=True,
             )
 
-# ------------------------------------------------------- Revenue/Users/Purchases ---
-elif active_tab == "Revenue":
-    render_cohort_tab("rev", "Revenue", is_pct, currency=True)
-elif active_tab == "Users":
-    render_cohort_tab("users", "Users", is_pct, currency=False)
-elif active_tab == "Purchases":
-    render_cohort_tab("purchases", "Purchases", is_pct, currency=False)
+# --------------------------------------------------------- Repeat Rate tab ---
+# Revenue/Users/Purchases/AOV/ARPU are all the same repeat-rate cohort table —
+# same View dropdown, same dimension filters — just a different Value
+# selected within one tab, rather than 5 separate top-level tabs.
+elif active_tab == "Repeat Rate":
+    if cohort_value_type == "Revenue":
+        render_cohort_tab("rev", "Revenue", is_pct, currency=True)
+    elif cohort_value_type == "Users":
+        render_cohort_tab("users", "Users", is_pct, currency=False)
+    elif cohort_value_type == "Purchases":
+        render_cohort_tab("purchases", "Purchases", is_pct, currency=False)
+    elif cohort_value_type == "AOV":
+        st.caption("AOV is always shown in absolute terms — the Repeat Rate % toggle does not apply here.")
+        render_cohort_tab(None, "AOV", is_pct=False, currency=True, ratio_denom="purchases")
+    elif cohort_value_type == "ARPU":
+        st.caption("ARPU is always shown in absolute terms — the Repeat Rate % toggle does not apply here.")
+        render_cohort_tab(None, "ARPU", is_pct=False, currency=True, ratio_denom="users")
 
-# ------------------------------------------------------------------ AOV tab ---
-elif active_tab == "AOV":
-    st.caption("AOV is always shown in absolute terms — the Repeat Rate % toggle does not apply here.")
-    render_cohort_tab(None, "AOV", is_pct=False, currency=True, ratio_denom="purchases")
-
-# ----------------------------------------------------------------- ARPU tab ---
-elif active_tab == "ARPU":
-    st.caption("ARPU is always shown in absolute terms — the Repeat Rate % toggle does not apply here.")
-    render_cohort_tab(None, "ARPU", is_pct=False, currency=True, ratio_denom="users")
+# ------------------------------------------------------------- User Guide tab ---
+elif active_tab == "User Guide":
+    render_user_guide()
 
 # --------------------------------------------------------------- Recency tab ---
 elif active_tab == "Recency":

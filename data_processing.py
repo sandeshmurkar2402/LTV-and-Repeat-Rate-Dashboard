@@ -60,7 +60,7 @@ METRIC_LABELS = {
     # 3-level row outline (Acq BL -> CM BL -> Acq Platform). Labeled distinctly
     # from "Cross Sales" (acq_business_line x cm_business_line only) and "By
     # Platform" (no business-line breakdown at all).
-    "Platforwise_Acq_BL_Repeat_Rate": "Cross Sales (Platform x Acq BL)",
+    "Platforwise_Acq_BL_Repeat_Rate": "Cross Sales - Platform x BL",
 }
 # Only these use the M0-M12+ acquisition-cohort pivot the Revenue/Users/Purchases/AOV
 # tabs are built around. Recency and the Session/Purchase Month metrics have their own
@@ -557,3 +557,4 @@ def styled_multi_group_table(str_df: pd.DataFrame, numeric_df: pd.DataFrame, gro
         gmap = block.fillna(fill_value).to_numpy()
         styler = styler.background_gradient(cmap=cmap, subset=cols, gmap=gmap, axis=None)
     return _with_header_style(styler)
+
