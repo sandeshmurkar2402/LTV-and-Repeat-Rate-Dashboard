@@ -149,31 +149,51 @@ CUSTOM_CSS = """
        fixed-height selectboxes/segmented controls next to it in the same row —
        a long label like "Platform: ANDROID" was wrapping onto 2 lines otherwise,
        making that one control taller than its neighbors. */
-    div[data-testid="stPopover"] > button {
+    button[data-testid="stPopoverButton"] {
         background-color: #eaf2fd !important;
         border: 1.6px solid #2a78d6 !important;
         border-radius: 8px !important;
         font-weight: 600 !important;
         min-height: 40px !important;
         height: 40px !important;
+        max-height: 40px !important;
         width: 100% !important;
         display: flex !important;
         align-items: center !important;
+        overflow: hidden !important;
     }
-    div[data-testid="stPopover"] > button:hover {
+    button[data-testid="stPopoverButton"]:hover {
         border-color: #184f95 !important;
     }
-    div[data-testid="stPopover"] > button p {
+    /* This whole block (including the rule above) was silently not applying
+       at all — `div[data-testid="stPopover"] > button` used a direct-child
+       combinator, but Streamlit actually wraps the real button one level
+       deeper (stPopover > an unlabeled aria-haspopup div > the button), so
+       that selector never matched anything, ever; only invisible so long as
+       every real label happened to be short enough to fit regardless.
+       Targeting the button's own data-testid instead makes this immune to
+       that nesting. Streamlit also wraps the label text in a
+       stMarkdownContainer div, not just a <p> (same gap the L1/L2/L3
+       outline-toggle-button fix hit), and that container needs min-width: 0
+       or a flex child is allowed to grow past its parent's fixed width
+       instead of actually truncating — the compact 3-4 dim cohort filter
+       columns made this matter in practice, since "Group Online" no longer
+       had much slack next to the dropdown chevron icon. */
+    button[data-testid="stPopoverButton"] p,
+    button[data-testid="stPopoverButton"] div[data-testid="stMarkdownContainer"] {
         white-space: nowrap !important;
         overflow: hidden !important;
         text-overflow: ellipsis !important;
+        min-width: 0 !important;
+        display: block !important;
+        width: 100% !important;
     }
 
     /* Session Month / Purchase Month's single packed filter row — every control in
        it gets a smaller font and tighter padding so up to 7 controls comfortably
        fit on one line. */
     .st-key-pm_row div[data-testid="stSelectbox"] div[data-baseweb="select"] > div,
-    .st-key-pm_row div[data-testid="stPopover"] > button,
+    .st-key-pm_row button[data-testid="stPopoverButton"],
     .st-key-pm_row div[data-testid="stButtonGroup"] button,
     .st-key-pm_row label p {
         font-size: 0.78rem !important;
@@ -182,7 +202,7 @@ CUSTOM_CSS = """
         padding: 0.2rem 0.45rem !important;
         min-height: 34px !important;
     }
-    .st-key-pm_row div[data-testid="stPopover"] > button,
+    .st-key-pm_row button[data-testid="stPopoverButton"],
     .st-key-pm_row div[data-testid="stSelectbox"] div[data-baseweb="select"] > div {
         min-height: 34px !important;
         height: 34px !important;
@@ -266,14 +286,21 @@ CUSTOM_CSS = """
         background: #fafbfd;
         font-size: 0.8rem;
     }
-    /* Third-level sub-row (Cross Sales (Platform x Acq BL)'s Acquisition
-       Platform, nested under an expanded CM Business Line, itself nested under
-       an expanded Acquisition Business Line) — one tint step further and the
-       deepest indent, continuing the same visual hierarchy as L1/L2. */
+    /* Third-level sub-row (Cross Sales (Platform x Acq BL)'s CM Business Line,
+       nested under an expanded Acquisition Platform, itself nested under an
+       expanded Acquisition Business Line) — one tint step further and a
+       deeper indent, continuing the same visual hierarchy as L1/L2. */
     .outline-sub-row-l3 {
         background: #f5f7fb;
         font-size: 0.78rem;
         color: #8a8f9a;
+    }
+    /* Fourth-level sub-row (Cross Sales (Platform x Acq BL)'s CM Platform,
+       nested under an expanded CM Business Line) — the deepest tier/indent. */
+    .outline-sub-row-l4 {
+        background: #f0f3f9;
+        font-size: 0.76rem;
+        color: #a0a5b0;
     }
     /* Every value cell (New, M0, M1, ...) of a given row lives inside this one
        grid wrapper — a period row's real st.columns rcol renders ONLY this
@@ -359,21 +386,22 @@ CUSTOM_CSS = """
     .outline-diff-pos { color: #0d5c3f; background-color: #e6f7ef; font-weight: 700; }
     .outline-diff-neg { color: #8a1f1f; background-color: #fdeaea; font-weight: 700; }
     .outline-emphasize { border-left: 3px solid #12233f; font-weight: 700; }
-    /* L1/L2 toggle buttons in the two/three-level outline (Cross Sales / Cross
+    /* L1/L2/L3 toggle buttons in the multi-level outline (Cross Sales / Cross
        Sales (Platform x Acq BL)) are a real st.button in the same label column
        a period button uses — fine for "Feb-2026", but a longer category name
        (e.g. "Group Online") wrapped onto 2 lines by default, making that row
        noticeably taller than its neighbors. Smaller font + no-wrap keeps every
-       L1/L2 row the same height as a period row; the label column itself
+       row the same height as a period row; the label column itself
        (st.columns([1.3, 8.7]) above) is wide enough for the common case, so
        nothing needs to scroll — an earlier overflow-x: auto fallback for
        outlier-long names showed a permanent scrollbar on ordinary rows too,
        looking like a stray thick border between rows, so it's gone in favor of
-       just a wider column. (L3, the deepest level, never has its own button —
-       it's always the plain-markdown leaf level — so only L1/L2 need this.) */
-    div[class*="_l1_toggle"] button p, div[class*="_l2_toggle"] button p,
+       just a wider column. (L4, the deepest level, never has its own button —
+       it's always the plain-markdown leaf level — so only L1/L2/L3 need this.) */
+    div[class*="_l1_toggle"] button p, div[class*="_l2_toggle"] button p, div[class*="_l3_toggle"] button p,
     div[class*="_l1_toggle"] button div[data-testid="stMarkdownContainer"],
-    div[class*="_l2_toggle"] button div[data-testid="stMarkdownContainer"] {
+    div[class*="_l2_toggle"] button div[data-testid="stMarkdownContainer"],
+    div[class*="_l3_toggle"] button div[data-testid="stMarkdownContainer"] {
         font-size: 0.78rem !important;
         white-space: nowrap !important;
     }
@@ -788,7 +816,9 @@ def render_outline_table(table_key, periods, agg_df, category_list, sub_df_fn, c
                           pct_cols, currency_cols, cmap=None, gradient_cols=None, groups=None,
                           primary_dim_label=None, secondary_dim_label=None, secondary_categories=None,
                           secondary_sub_df_fn=None, tertiary_dim_label=None, tertiary_categories=None,
-                          tertiary_sub_df_fn=None, primary_row_suffix="", secondary_row_prefix="", tertiary_row_prefix=""):
+                          tertiary_sub_df_fn=None, primary_row_suffix="", secondary_row_prefix="", tertiary_row_prefix="",
+                          quaternary_dim_label=None, quaternary_categories=None, quaternary_sub_df_fn=None,
+                          quaternary_row_prefix=""):
     """Google-Sheets-style row outline. Each period is one row showing the
     combined/aggregate value — exactly as the table looked before any
     per-category breakdown existed. A '+' control expands that period IN PLACE
@@ -828,6 +858,7 @@ def render_outline_table(table_key, periods, agg_df, category_list, sub_df_fn, c
     currency_cols = currency_cols or set()
     has_l2 = bool(secondary_categories) and secondary_sub_df_fn is not None
     has_l3 = has_l2 and bool(tertiary_categories) and tertiary_sub_df_fn is not None
+    has_l4 = has_l3 and bool(quaternary_categories) and quaternary_sub_df_fn is not None
     disp_columns = [label_map.get(c, c) for c in columns]
 
     if len(category_list) <= 1:
@@ -852,6 +883,10 @@ def render_outline_table(table_key, periods, agg_df, category_list, sub_df_fn, c
     if l2_exp_key not in st.session_state:
         st.session_state[l2_exp_key] = set()
     l2_expanded = st.session_state[l2_exp_key]
+    l3_exp_key = f"{table_key}__expanded_L3"
+    if l3_exp_key not in st.session_state:
+        st.session_state[l3_exp_key] = set()
+    l3_expanded = st.session_state[l3_exp_key]
 
     def _fmt(v, c):
         if pd.isna(v):
@@ -872,6 +907,12 @@ def render_outline_table(table_key, periods, agg_df, category_list, sub_df_fn, c
                     st.session_state[l2_exp_key] = {
                         (p, cat, l2_cat) for p in periods for cat in category_list for l2_cat in secondary_categories
                     }
+                if has_l4:
+                    st.session_state[l3_exp_key] = {
+                        (p, cat, l2_cat, l3_cat)
+                        for p in periods for cat in category_list
+                        for l2_cat in secondary_categories for l3_cat in tertiary_categories
+                    }
                 st.rerun()
         with ec2:
             if st.button("Collapse all periods", key=f"{table_key}_collapse_all"):
@@ -880,6 +921,8 @@ def render_outline_table(table_key, periods, agg_df, category_list, sub_df_fn, c
                     st.session_state[l1_exp_key] = set()
                 if has_l3:
                     st.session_state[l2_exp_key] = set()
+                if has_l4:
+                    st.session_state[l3_exp_key] = set()
                 st.rerun()
 
         if has_l2:
@@ -889,7 +932,11 @@ def render_outline_table(table_key, periods, agg_df, category_list, sub_df_fn, c
             # l1_label_text comment below). Sub-rows are still prefixed in
             # their CSV export key, so between this caption and that prefix
             # it's always clear which dimension a given row's value belongs to.
-            levels = [primary_dim_label, secondary_dim_label] + ([tertiary_dim_label] if has_l3 else [])
+            levels = [primary_dim_label, secondary_dim_label]
+            if has_l3:
+                levels.append(tertiary_dim_label)
+            if has_l4:
+                levels.append(quaternary_dim_label)
             st.caption(f"Rows expand: {' → '.join(levels)}")
 
         st.markdown('<div class="outline-wrap">', unsafe_allow_html=True)
@@ -1043,7 +1090,7 @@ def render_outline_table(table_key, periods, agg_df, category_list, sub_df_fn, c
                             l2_label_text = f"{secondary_dim_label + ': ' if secondary_dim_label else ''}{l2_cat}"  # CSV export key only
                             visible_rows[f"{label} — {l1_label_text} — {l2_label_text}"] = {c: l2_row.get(c, np.nan) for c in columns}
 
-                            if l2_is_exp:
+                            if l2_is_exp and not has_l4:
                                 l3_rows_html = []
                                 for l3_cat in tertiary_categories:
                                     l3_df = tertiary_sub_df_fn(cat, l2_cat, l3_cat)
@@ -1056,6 +1103,53 @@ def render_outline_table(table_key, periods, agg_df, category_list, sub_df_fn, c
                                     l3_label_text = f"{tertiary_dim_label + ': ' if tertiary_dim_label else ''}{l3_cat}"
                                     visible_rows[f"{label} — {l1_label_text} — {l2_label_text} — {l3_label_text}"] = {c: l3_row.get(c, np.nan) for c in columns}
                                 st.markdown("".join(l3_rows_html), unsafe_allow_html=True)
+
+                            elif l2_is_exp and has_l4:
+                                # 4-level case (Cross Sales (Platform x Acq BL),
+                                # now that platform/"CM Platform" also has real
+                                # per-type values): L3 becomes its OWN expandable
+                                # row too (same real-button treatment as L1/L2
+                                # above), revealing L4 as the new batched-markdown
+                                # leaf level beneath an expanded L3 row.
+                                for l3_cat in tertiary_categories:
+                                    l3_df = tertiary_sub_df_fn(cat, l2_cat, l3_cat)
+                                    l3_row = l3_df.loc[p] if (l3_df is not None and p in l3_df.index) else pd.Series({c: np.nan for c in columns})
+                                    l3_key = (p, cat, l2_cat, l3_cat)
+                                    l3_is_exp = l3_key in l3_expanded
+                                    l3lcol, l3rcol = st.columns([1.3, 8.7])
+                                    with l3lcol:
+                                        if st.button(
+                                            f"{tertiary_row_prefix}{l3_cat}", key=f"{table_key}_{label}_{cat}_{l2_cat}_{l3_cat}_l3_toggle",
+                                            icon="➖" if l3_is_exp else "➕",
+                                        ):
+                                            if l3_is_exp:
+                                                l3_expanded.discard(l3_key)
+                                            else:
+                                                l3_expanded.add(l3_key)
+                                            st.session_state[l3_exp_key] = l3_expanded
+                                            st.rerun()
+                                    with l3rcol:
+                                        l3_value_cells = "".join(f'<div class="outline-cell">{_fmt(l3_row.get(c), c)}</div>' for c in columns)
+                                        st.markdown(
+                                            f'<div class="outline-row outline-sub-row outline-sub-row-l3"><div class="outline-value-cells">{l3_value_cells}</div></div>',
+                                            unsafe_allow_html=True,
+                                        )
+                                    l3_label_text = f"{tertiary_dim_label + ': ' if tertiary_dim_label else ''}{l3_cat}"  # CSV export key only
+                                    visible_rows[f"{label} — {l1_label_text} — {l2_label_text} — {l3_label_text}"] = {c: l3_row.get(c, np.nan) for c in columns}
+
+                                    if l3_is_exp:
+                                        l4_rows_html = []
+                                        for l4_cat in quaternary_categories:
+                                            l4_df = quaternary_sub_df_fn(cat, l2_cat, l3_cat, l4_cat)
+                                            l4_row = l4_df.loc[p] if (l4_df is not None and p in l4_df.index) else pd.Series({c: np.nan for c in columns})
+                                            label_cell = f'<div class="outline-cell outline-label-cell">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{quaternary_row_prefix}{l4_cat}</div>'
+                                            l4_value_cells = "".join(f'<div class="outline-cell">{_fmt(l4_row.get(c), c)}</div>' for c in columns)
+                                            l4_rows_html.append(
+                                                f'<div class="outline-row outline-sub-row outline-sub-row-l4">{label_cell}<div class="outline-value-cells">{l4_value_cells}</div></div>'
+                                            )
+                                            l4_label_text = f"{quaternary_dim_label + ': ' if quaternary_dim_label else ''}{l4_cat}"
+                                            visible_rows[f"{label} — {l1_label_text} — {l2_label_text} — {l3_label_text} — {l4_label_text}"] = {c: l4_row.get(c, np.nan) for c in columns}
+                                        st.markdown("".join(l4_rows_html), unsafe_allow_html=True)
         st.markdown("</div>", unsafe_allow_html=True)
 
     visible_df = pd.DataFrame.from_dict(visible_rows, orient="index", columns=columns)
@@ -1069,7 +1163,9 @@ def render_outline_diff_table(table_key, periods, agg_df, category_list, sub_df_
                                chart_mode="trend", chart_col=None, chart_y_title="",
                                primary_dim_label=None, secondary_dim_label=None, secondary_categories=None,
                                secondary_sub_df_fn=None, tertiary_dim_label=None, tertiary_categories=None,
-                               tertiary_sub_df_fn=None, primary_row_suffix="", secondary_row_prefix="", tertiary_row_prefix=""):
+                               tertiary_sub_df_fn=None, primary_row_suffix="", secondary_row_prefix="", tertiary_row_prefix="",
+                               quaternary_dim_label=None, quaternary_categories=None, quaternary_sub_df_fn=None,
+                               quaternary_row_prefix=""):
     """Period-over-period change, using the exact same per-period +/- outline
     mechanism as render_outline_table above — and, deliberately, the SAME
     st.session_state expanded-periods key (table_key), so expanding a period in
@@ -1112,6 +1208,7 @@ def render_outline_diff_table(table_key, periods, agg_df, category_list, sub_df_
 
     has_l2 = bool(secondary_categories) and secondary_sub_df_fn is not None
     has_l3 = has_l2 and bool(tertiary_categories) and tertiary_sub_df_fn is not None
+    has_l4 = has_l3 and bool(quaternary_categories) and quaternary_sub_df_fn is not None
 
     def _diff_sub_l2(l1_cat, l2_cat):
         sub = secondary_sub_df_fn(l1_cat, l2_cat)
@@ -1127,6 +1224,13 @@ def render_outline_diff_table(table_key, periods, agg_df, category_list, sub_df_
         d, _ = dp.compute_period_diff(sub.reindex(columns=columns), pct_cols, diff_mode)
         return d
 
+    def _diff_sub_l4(l1_cat, l2_cat, l3_cat, l4_cat):
+        sub = quaternary_sub_df_fn(l1_cat, l2_cat, l3_cat, l4_cat)
+        if sub is None or sub.empty:
+            return None
+        d, _ = dp.compute_period_diff(sub.reindex(columns=columns), pct_cols, diff_mode)
+        return d
+
     exp_key, expanded = _outline_expanded_state(table_key)  # shared with the main table above
     l1_exp_key = f"{table_key}__expanded_L1"  # shared with the main table above
     if l1_exp_key not in st.session_state:
@@ -1136,6 +1240,10 @@ def render_outline_diff_table(table_key, periods, agg_df, category_list, sub_df_
     if l2_exp_key not in st.session_state:
         st.session_state[l2_exp_key] = set()
     l2_expanded = st.session_state[l2_exp_key]
+    l3_exp_key = f"{table_key}__expanded_L3"  # shared with the main table above
+    if l3_exp_key not in st.session_state:
+        st.session_state[l3_exp_key] = set()
+    l3_expanded = st.session_state[l3_exp_key]
     disp_columns = [label_map.get(c, c) for c in columns]
     has_children = len(category_list) > 1
 
@@ -1322,7 +1430,7 @@ def render_outline_diff_table(table_key, periods, agg_df, category_list, sub_df_
                             l2_label_text = f"{secondary_dim_label + ': ' if secondary_dim_label else ''}{l2_cat}"  # CSV export key only
                             visible_rows[f"{label} — {l1_label_text} — {l2_label_text}"] = {c: l2_row.get(c, np.nan) for c in columns}
 
-                            if l2_is_exp:
+                            if l2_is_exp and not has_l4:
                                 l3_rows_html = []
                                 for l3_cat in tertiary_categories:
                                     d3 = _diff_sub_l3(cat, l2_cat, l3_cat)
@@ -1338,6 +1446,55 @@ def render_outline_diff_table(table_key, periods, agg_df, category_list, sub_df_
                                     l3_label_text = f"{tertiary_dim_label + ': ' if tertiary_dim_label else ''}{l3_cat}"
                                     visible_rows[f"{label} — {l1_label_text} — {l2_label_text} — {l3_label_text}"] = {c: l3_row.get(c, np.nan) for c in columns}
                                 st.markdown("".join(l3_rows_html), unsafe_allow_html=True)
+
+                            elif l2_is_exp and has_l4:
+                                # 4-level diff, mirroring render_outline_table's
+                                # 4-level branch — same shared l3_exp_key.
+                                for l3_cat in tertiary_categories:
+                                    d3 = _diff_sub_l3(cat, l2_cat, l3_cat)
+                                    l3_row = d3.loc[p] if (d3 is not None and p in d3.index) else pd.Series({c: np.nan for c in columns})
+                                    l3_key = (p, cat, l2_cat, l3_cat)
+                                    l3_is_exp = l3_key in l3_expanded
+                                    l3lcol, l3rcol = st.columns([1.3, 8.7])
+                                    with l3lcol:
+                                        if st.button(
+                                            f"{tertiary_row_prefix}{l3_cat}", key=f"{table_key}_diff_{label}_{cat}_{l2_cat}_{l3_cat}_l3_toggle",
+                                            icon="➖" if l3_is_exp else "➕",
+                                        ):
+                                            if l3_is_exp:
+                                                l3_expanded.discard(l3_key)
+                                            else:
+                                                l3_expanded.add(l3_key)
+                                            st.session_state[l3_exp_key] = l3_expanded
+                                            st.rerun()
+                                    with l3rcol:
+                                        l3_value_cells = "".join(
+                                            f'<div class="outline-cell {_cls(l3_row.get(c), c)}">{_fmt(l3_row.get(c), c)}</div>'
+                                            for c in columns
+                                        )
+                                        st.markdown(
+                                            f'<div class="outline-row outline-sub-row outline-sub-row-l3"><div class="outline-value-cells">{l3_value_cells}</div></div>',
+                                            unsafe_allow_html=True,
+                                        )
+                                    l3_label_text = f"{tertiary_dim_label + ': ' if tertiary_dim_label else ''}{l3_cat}"  # CSV export key only
+                                    visible_rows[f"{label} — {l1_label_text} — {l2_label_text} — {l3_label_text}"] = {c: l3_row.get(c, np.nan) for c in columns}
+
+                                    if l3_is_exp:
+                                        l4_rows_html = []
+                                        for l4_cat in quaternary_categories:
+                                            d4 = _diff_sub_l4(cat, l2_cat, l3_cat, l4_cat)
+                                            l4_row = d4.loc[p] if (d4 is not None and p in d4.index) else pd.Series({c: np.nan for c in columns})
+                                            label_cell = f'<div class="outline-cell outline-label-cell">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{quaternary_row_prefix}{l4_cat}</div>'
+                                            l4_value_cells = "".join(
+                                                f'<div class="outline-cell {_cls(l4_row.get(c), c)}">{_fmt(l4_row.get(c), c)}</div>'
+                                                for c in columns
+                                            )
+                                            l4_rows_html.append(
+                                                f'<div class="outline-row outline-sub-row outline-sub-row-l4">{label_cell}<div class="outline-value-cells">{l4_value_cells}</div></div>'
+                                            )
+                                            l4_label_text = f"{quaternary_dim_label + ': ' if quaternary_dim_label else ''}{l4_cat}"
+                                            visible_rows[f"{label} — {l1_label_text} — {l2_label_text} — {l3_label_text} — {l4_label_text}"] = {c: l4_row.get(c, np.nan) for c in columns}
+                                        st.markdown("".join(l4_rows_html), unsafe_allow_html=True)
         st.markdown("</div>", unsafe_allow_html=True)
 
     visible_df = pd.DataFrame.from_dict(visible_rows, orient="index", columns=columns)
@@ -1397,7 +1554,7 @@ st.caption(
 )
 
 # ---------------------------------------------------------------- Tabs row ---
-COHORT_TABS = {"Revenue", "Users", "Purchases", "AOV"}
+COHORT_TABS = {"Revenue", "Users", "Purchases", "AOV", "ARPU"}
 PERIOD_METRIC_TABS = {
     "Session Month": {
         "Overall": "Session_Month_Rev",
@@ -1425,7 +1582,7 @@ PERIOD_METRIC_VIEWS = [
 # 'All' meaning "don't fix it — show contribution to the overall total") and break
 # down by the other, instead of filtering both to a multi-select.
 CONTRIBUTION_VIEWS = {"BL Contribution to Platform", "Platform Contribution to BL"}
-TAB_NAMES = ["LTV", "Revenue", "Users", "Purchases", "AOV", "Recency", "Session Month", "Purchase Month"]
+TAB_NAMES = ["LTV", "Revenue", "Users", "Purchases", "AOV", "ARPU", "Recency", "Session Month", "Purchase Month"]
 with st.container(key="tab_nav"):
     active_tab = st.segmented_control(
         "Section", TAB_NAMES, default="Revenue", key="active_tab", label_visibility="collapsed"
@@ -1517,18 +1674,39 @@ cohort_secondary_dim = None
 cohort_secondary_values = []
 cohort_tertiary_dim = None
 cohort_tertiary_values = []
+cohort_quaternary_dim = None
+cohort_quaternary_values = []
 
 if active_tab in COHORT_TABS:
-    # 3 dim slots reserved unconditionally (not just 2) so a metric with 3 active
-    # dimensions (currently only Platforwise_Acq_BL_Repeat_Rate, since its
-    # cm_business_line column was populated with real per-type values) gets a
-    # 3rd filter automatically — metrics with fewer active dims simply leave the
-    # extra slot(s) empty (the loop below only renders as many pickers as there
-    # are active dims), so this generalizes to any future 3-dimension metric too.
-    metric_col, dim1_col, dim2_col, dim3_col, mode_col, month_col = st.columns([1.5, 0.95, 0.95, 0.95, 1.2, 1.35])
-
     metric_options = dp.get_metric_options(repeat_df)
     default_metric = "Overall_Repeat_Rate" if "Overall_Repeat_Rate" in metric_options else metric_options[0]
+    # How many dim-filter slots this row needs depends on the CURRENTLY
+    # selected metric (peeked from session_state here, before the metric_col
+    # widget below — persistent_selectbox reads/writes that same key, so this
+    # always matches what actually renders). Reserving a fixed 4 slots
+    # unconditionally — even for metrics that only use 1-2 of them — diluted
+    # every column's share of the row, including Mode, so "Repeat Rate %"
+    # wrapped onto its own line for every metric, not just the 4-dimension
+    # one. Sizing the row to the actual dim count fixes that everywhere else
+    # while still fitting all 4 pickers for Cross Sales (Platform x Acq BL).
+    _peek_metric = st.session_state.get("cohort_metric", default_metric)
+    if _peek_metric not in metric_options:
+        _peek_metric = default_metric
+    _peek_active_dims, _ = dp.get_active_dimension_filters(repeat_df, _peek_metric)
+    _n_dim_slots = max(1, min(4, len(_peek_active_dims)))
+    if _n_dim_slots <= 2:
+        # Original (pre-3/4-level) proportions, unchanged.
+        _col_ratios = [1.6] + [1.1] * _n_dim_slots + [1.3, 1.5]
+    else:
+        # 3-4 dim metrics (currently only Platforwise_Acq_BL_Repeat_Rate) —
+        # dim chips only ever show "All"/"N selected", so they stay compact;
+        # Mode/Month get a bit more than the 2-dim case since there's more
+        # total row content, keeping "Repeat Rate %" on one line.
+        _col_ratios = [1.3] + [0.75] * _n_dim_slots + [1.5, 1.4]
+    _cohort_filter_cols = st.columns(_col_ratios)
+    metric_col, mode_col, month_col = _cohort_filter_cols[0], _cohort_filter_cols[-2], _cohort_filter_cols[-1]
+    dim_slot_cols = _cohort_filter_cols[1:-2]
+
     with metric_col:
         # Shared across Revenue/Users/Purchases/AOV on purpose (same state_key
         # regardless of active_tab) so picking a metric on one keeps it in sync
@@ -1550,23 +1728,27 @@ if active_tab in COHORT_TABS:
     # style +/- expand on the table itself, see render_outline_table) — the main
     # table below is still the original combined/aggregate row per period, summing
     # every checked category together exactly as it always has.
-    dim_slots = [dim1_col, dim2_col, dim3_col]
+    dim_slots = dim_slot_cols
     selections = {}
     active_dim_cols = list(active_dims.keys())
     cohort_primary_dim = active_dim_cols[0] if active_dim_cols else None
-    # cohort_secondary_dim/cohort_tertiary_dim (the 2nd/3rd active dimensions, if
-    # any) drive the 2nd/3rd levels of the outline table's expand/collapse — only
-    # metrics with that many active dimensions have one (currently Cross_Sell:
-    # acq_business_line x cm_business_line — 2 levels; Platforwise_Acq_BL_Repeat_Rate:
-    # acq_business_line x cm_business_line x acq_platform — 3 levels, since its
-    # cm_business_line column was populated with real per-type values); every other
-    # metric has 0-1 active dims and stays single-level. Generalizes automatically
-    # to any future metric with up to 3 active dimensions.
+    # cohort_secondary_dim/cohort_tertiary_dim/cohort_quaternary_dim (the
+    # 2nd/3rd/4th active dimensions, if any) drive the 2nd/3rd/4th levels of the
+    # outline table's expand/collapse — only metrics with that many active
+    # dimensions have one (currently Cross_Sell: acq_business_line x
+    # cm_business_line — 2 levels; Platforwise_Acq_BL_Repeat_Rate:
+    # acq_business_line x acq_platform x cm_business_line x platform — 4 levels,
+    # since its cm_business_line and platform columns were populated with real
+    # per-type values); every other metric has 0-1 active dims and stays
+    # single-level. Generalizes automatically to any future metric with up to 4
+    # active dimensions.
     cohort_secondary_dim = active_dim_cols[1] if len(active_dim_cols) > 1 else None
     cohort_tertiary_dim = active_dim_cols[2] if len(active_dim_cols) > 2 else None
+    cohort_quaternary_dim = active_dim_cols[3] if len(active_dim_cols) > 3 else None
     cohort_primary_values = []
     cohort_secondary_values = []
     cohort_tertiary_values = []
+    cohort_quaternary_values = []
     for i, (col, options) in enumerate(active_dims.items()):
         if i >= len(dim_slots):
             break
@@ -1590,16 +1772,20 @@ if active_tab in COHORT_TABS:
             cohort_secondary_values = picked
         elif col == cohort_tertiary_dim:
             cohort_tertiary_values = picked
+        elif col == cohort_quaternary_dim:
+            cohort_quaternary_values = picked
 
     # The combined/aggregate table (exactly as before any outline-table changes):
     # every checked category across both dimensions summed into one row per period.
     filtered = dp.filter_df(metric_sub, selections)
-    filtered = dp.with_acq_line_enrolled(repeat_df, filtered, metric, selections.get("acq_business_line"))
+    filtered = dp.with_acq_line_enrolled(
+        repeat_df, filtered, metric, selections.get("acq_business_line"), acq_platform=selections.get("acq_platform")
+    )
     # Secondary-only filter (excludes the primary dim) — used to build each
     # primary-category's own sub-row inside the outline table.
     secondary_selections = {c: v for c, v in selections.items() if c != cohort_primary_dim}
 
-    show_toggle = active_tab != "AOV"
+    show_toggle = active_tab not in ("AOV", "ARPU")
     if show_toggle:
         with mode_col:
             with st.container(key="mode_toggle"):
@@ -1754,7 +1940,7 @@ elif active_tab in PERIOD_METRIC_TABS:
 
         from_ts, to_ts = render_month_range(month_col_pm)
 
-is_pct = (view_mode == "Repeat Rate %") and (active_tab != "AOV")
+is_pct = (view_mode == "Repeat Rate %") and (active_tab not in ("AOV", "ARPU"))
 recency_is_pct = recency_mode == "% of Total"
 
 # Every branch above (LTV / cohort tabs / Recency / Session-Purchase Month) sets
@@ -1772,10 +1958,11 @@ ltv_df = ltv_df[(ltv_df["Month"] >= from_ts) & (ltv_df["Month"] <= to_ts)]
 st.divider()
 
 
-def render_cohort_tab(value_col, title, is_pct, currency=False, aov_mode=False):
-    """Renders the Revenue/Users/Purchases (value_col given) or AOV (aov_mode=True,
-    value_col ignored — AOV is computed from rev/purchases per cohort column)
-    tables for whichever metric is selected in the View dropdown.
+def render_cohort_tab(value_col, title, is_pct, currency=False, ratio_denom=None):
+    """Renders the Revenue/Users/Purchases (value_col given) or AOV/ARPU
+    (ratio_denom="purchases"/"users", value_col ignored — the ratio is computed
+    from rev/ratio_denom per cohort column) tables for whichever metric is
+    selected in the View dropdown.
 
     The table itself is always the original combined/aggregate row per period
     (every checked category summed together, exactly as before any outline-table
@@ -1788,10 +1975,10 @@ def render_cohort_tab(value_col, title, is_pct, currency=False, aov_mode=False):
         st.info("No data available for this filter combination.")
         return
 
-    if aov_mode:
+    if ratio_denom:
         rev_pv = dp.pivot_cohort(filtered, "rev")
-        purch_pv = dp.pivot_cohort(filtered, "purchases")
-        pv = dp.compute_aov(rev_pv, purch_pv)
+        denom_pv = dp.pivot_cohort(filtered, ratio_denom)
+        pv = dp.compute_aov(rev_pv, denom_pv)
     else:
         pv = dp.pivot_cohort(filtered, value_col)
     if pv.empty or "enrolled_users" not in pv.columns:
@@ -1815,17 +2002,37 @@ def render_cohort_tab(value_col, title, is_pct, currency=False, aov_mode=False):
     gradient_cols = [c for c in columns if c != "enrolled_users"]
     cmap = dp.GREEN_HEATMAP_CMAP if is_pct else dp.BLUE_HEATMAP_CMAP
 
+    def _acq_platform_for(l1_cat=None, l2_cat=None, l3_cat=None, l4_cat=None):
+        # Mirrors the acq_for_enrolled resolution below, but for
+        # acq_platform (only meaningful for PLATFORM_SELF_MATCH_METRICS,
+        # currently just Cross Sales (Platform x Acq BL)): whichever level
+        # currently has acq_platform fixed to one specific value contributes
+        # that value; if acq_platform isn't one of the dims fixed at this
+        # level (or this metric has no platform self-match at all), fall back
+        # to the checked-list filter, which is a no-op for every other metric.
+        if cohort_primary_dim == "acq_platform":
+            return l1_cat
+        if cohort_secondary_dim == "acq_platform":
+            return l2_cat
+        if cohort_tertiary_dim == "acq_platform":
+            return l3_cat
+        if cohort_quaternary_dim == "acq_platform":
+            return l4_cat
+        return selections.get("acq_platform")
+
     def sub_df_fn(cat):
         if cohort_primary_dim is None:
             return None
         cat_df = dp.filter_df(metric_sub, {**secondary_selections, cohort_primary_dim: cat})
         acq_for_enrolled = cat if cohort_primary_dim == "acq_business_line" else selections.get("acq_business_line")
-        cat_df = dp.with_acq_line_enrolled(repeat_df, cat_df, metric, acq_for_enrolled)
+        cat_df = dp.with_acq_line_enrolled(
+            repeat_df, cat_df, metric, acq_for_enrolled, acq_platform=_acq_platform_for(l1_cat=cat)
+        )
         cat_df = cat_df[(cat_df["period"] >= from_ts) & (cat_df["period"] <= to_ts)]
-        if aov_mode:
+        if ratio_denom:
             r = dp.pivot_cohort(cat_df, "rev")
-            p_ = dp.pivot_cohort(cat_df, "purchases")
-            sub_pv = dp.compute_aov(r, p_)
+            d_ = dp.pivot_cohort(cat_df, ratio_denom)
+            sub_pv = dp.compute_aov(r, d_)
         else:
             sub_pv = dp.pivot_cohort(cat_df, value_col)
         return dp.to_repeat_rate_pct(sub_pv) if is_pct else sub_pv
@@ -1849,12 +2056,14 @@ def render_cohort_tab(value_col, title, is_pct, currency=False, aov_mode=False):
             acq_for_enrolled = l2_cat
         else:
             acq_for_enrolled = selections.get("acq_business_line")
-        cat_df = dp.with_acq_line_enrolled(repeat_df, cat_df, metric, acq_for_enrolled)
+        cat_df = dp.with_acq_line_enrolled(
+            repeat_df, cat_df, metric, acq_for_enrolled, acq_platform=_acq_platform_for(l1_cat=l1_cat, l2_cat=l2_cat)
+        )
         cat_df = cat_df[(cat_df["period"] >= from_ts) & (cat_df["period"] <= to_ts)]
-        if aov_mode:
+        if ratio_denom:
             r = dp.pivot_cohort(cat_df, "rev")
-            p_ = dp.pivot_cohort(cat_df, "purchases")
-            sub_pv = dp.compute_aov(r, p_)
+            d_ = dp.pivot_cohort(cat_df, ratio_denom)
+            sub_pv = dp.compute_aov(r, d_)
         else:
             sub_pv = dp.pivot_cohort(cat_df, value_col)
         return dp.to_repeat_rate_pct(sub_pv) if is_pct else sub_pv
@@ -1880,12 +2089,53 @@ def render_cohort_tab(value_col, title, is_pct, currency=False, aov_mode=False):
             acq_for_enrolled = l3_cat
         else:
             acq_for_enrolled = selections.get("acq_business_line")
-        cat_df = dp.with_acq_line_enrolled(repeat_df, cat_df, metric, acq_for_enrolled)
+        cat_df = dp.with_acq_line_enrolled(
+            repeat_df, cat_df, metric, acq_for_enrolled,
+            acq_platform=_acq_platform_for(l1_cat=l1_cat, l2_cat=l2_cat, l3_cat=l3_cat),
+        )
         cat_df = cat_df[(cat_df["period"] >= from_ts) & (cat_df["period"] <= to_ts)]
-        if aov_mode:
+        if ratio_denom:
             r = dp.pivot_cohort(cat_df, "rev")
-            p_ = dp.pivot_cohort(cat_df, "purchases")
-            sub_pv = dp.compute_aov(r, p_)
+            d_ = dp.pivot_cohort(cat_df, ratio_denom)
+            sub_pv = dp.compute_aov(r, d_)
+        else:
+            sub_pv = dp.pivot_cohort(cat_df, value_col)
+        return dp.to_repeat_rate_pct(sub_pv) if is_pct else sub_pv
+
+    def quaternary_sub_df_fn(l1_cat, l2_cat, l3_cat, l4_cat):
+        # Fixes all four dimensions — for the FOURTH level of the outline
+        # table's expand/collapse (only reached when the selected metric has 4
+        # active dimensions, currently just Cross Sales (Platform x Acq BL)
+        # now that its cm_business_line AND platform columns both have real
+        # per-type values).
+        if None in (cohort_primary_dim, cohort_secondary_dim, cohort_tertiary_dim, cohort_quaternary_dim):
+            return None
+        excluded = (cohort_primary_dim, cohort_secondary_dim, cohort_tertiary_dim, cohort_quaternary_dim)
+        filt = {c: v for c, v in selections.items() if c not in excluded}
+        filt[cohort_primary_dim] = l1_cat
+        filt[cohort_secondary_dim] = l2_cat
+        filt[cohort_tertiary_dim] = l3_cat
+        filt[cohort_quaternary_dim] = l4_cat
+        cat_df = dp.filter_df(metric_sub, filt)
+        if cohort_primary_dim == "acq_business_line":
+            acq_for_enrolled = l1_cat
+        elif cohort_secondary_dim == "acq_business_line":
+            acq_for_enrolled = l2_cat
+        elif cohort_tertiary_dim == "acq_business_line":
+            acq_for_enrolled = l3_cat
+        elif cohort_quaternary_dim == "acq_business_line":
+            acq_for_enrolled = l4_cat
+        else:
+            acq_for_enrolled = selections.get("acq_business_line")
+        cat_df = dp.with_acq_line_enrolled(
+            repeat_df, cat_df, metric, acq_for_enrolled,
+            acq_platform=_acq_platform_for(l1_cat=l1_cat, l2_cat=l2_cat, l3_cat=l3_cat, l4_cat=l4_cat),
+        )
+        cat_df = cat_df[(cat_df["period"] >= from_ts) & (cat_df["period"] <= to_ts)]
+        if ratio_denom:
+            r = dp.pivot_cohort(cat_df, "rev")
+            d_ = dp.pivot_cohort(cat_df, ratio_denom)
+            sub_pv = dp.compute_aov(r, d_)
         else:
             sub_pv = dp.pivot_cohort(cat_df, value_col)
         return dp.to_repeat_rate_pct(sub_pv) if is_pct else sub_pv
@@ -1900,19 +2150,25 @@ def render_cohort_tab(value_col, title, is_pct, currency=False, aov_mode=False):
         tertiary_dim_label=dp.DIMENSION_LABELS.get(cohort_tertiary_dim, cohort_tertiary_dim),
         tertiary_categories=cohort_tertiary_values if cohort_tertiary_dim else None,
         tertiary_sub_df_fn=tertiary_sub_df_fn if cohort_tertiary_dim else None,
-        # acq_business_line and cm_business_line share the exact same category
-        # vocabulary (e.g. "Group Online" is a value of both) — a short " Acq"
-        # suffix on Acquisition Business Line rows and a "CM " prefix on CM
-        # Business Line rows disambiguates every single row, not just via the
-        # one-time "Rows expand: ..." caption. Scoped to the actual column
-        # identity (not just "whichever is primary/secondary/tertiary") so
-        # this only fires for these two specific dimensions, wherever they
-        # end up in the hierarchy (CM Business Line is level 2 for Cross
-        # Sales, but level 3 for Cross Sales (Platform x Acq BL) — see
-        # DIMENSION_COLS' ordering comment in data_processing.py).
+        quaternary_dim_label=dp.DIMENSION_LABELS.get(cohort_quaternary_dim, cohort_quaternary_dim),
+        quaternary_categories=cohort_quaternary_values if cohort_quaternary_dim else None,
+        quaternary_sub_df_fn=quaternary_sub_df_fn if cohort_quaternary_dim else None,
+        # acq_business_line/cm_business_line and acq_platform/platform each
+        # share the exact same category vocabulary within their pair (e.g.
+        # "Group Online" is a value of both business-line columns; "ANDROID"
+        # is a value of both platform columns) — a short " Acq" suffix on
+        # Acquisition Business Line rows and a "CM " prefix on CM Business
+        # Line/CM Platform rows disambiguates every single row, not just via
+        # the one-time "Rows expand: ..." caption. Scoped to the actual column
+        # identity (not just "whichever is primary/secondary/tertiary/
+        # quaternary") so this only fires for these specific dimensions,
+        # wherever they end up in the hierarchy (CM Business Line is level 2
+        # for Cross Sales, but level 3 for Cross Sales (Platform x Acq BL) —
+        # see DIMENSION_COLS' ordering comment in data_processing.py).
         primary_row_suffix=" Acq" if cohort_primary_dim == "acq_business_line" else "",
         secondary_row_prefix="CM " if cohort_secondary_dim == "cm_business_line" else "",
         tertiary_row_prefix="CM " if cohort_tertiary_dim == "cm_business_line" else "",
+        quaternary_row_prefix="CM " if cohort_quaternary_dim == "platform" else "",
     ) if cohort_secondary_dim else {}
     disp_df = render_outline_table(
         table_key, periods, pv_show, cohort_primary_values, sub_df_fn, columns, dp.COHORT_LABELS,
@@ -2021,14 +2277,31 @@ def render_period_metric_tab(tab_title, value_type, view_label):
         st.info("No data available for this filter combination.")
         return
 
+    # Platform Fees isn't a real business line — it's an extra charge on a purchase
+    # that already belongs to some other business line. Summing Users across every
+    # checked business line (Business Line / Business Line & Platform views only)
+    # would double-count those users if Platform Fees' own rows were included, so
+    # exclude them from that combined total. Revenue/Purchases/AOV are untouched,
+    # and views with no business-line dimension active (Overall, Platform) never
+    # hit this at all.
+    _business_line_in_view = pm_primary_dim == "cm_business_line" or pm_secondary_dim == "cm_business_line"
+
     def _compute_combined(df_scope, base_value_type=value_type):
-        p_ = dp.pivot_period_metric(df_scope, base_value_type)
+        p_scope = dp.exclude_platform_fees(df_scope) if (base_value_type == "Users" and _business_line_in_view) else df_scope
+        p_ = dp.pivot_period_metric(p_scope, base_value_type)
         p_pct = dp.with_new_repeat_pct(p_)
         r_ = p_ if base_value_type == "Revenue" else dp.pivot_period_metric(df_scope, "Revenue")
         pu_ = p_ if base_value_type == "Purchases" else dp.pivot_period_metric(df_scope, "Purchases")
         a_ = dp.compute_aov(r_, pu_)
         a_named = a_.rename(columns={"Total": "AOV Total", "New": "AOV New", "Repeat": "AOV Repeat"})
-        return p_, p_pct, a_, p_pct.join(a_named, how="left")
+        # ARPU = Total Revenue / Total Users — Total only, not split by New/Repeat
+        # (per request). Its Users denominator gets the same Platform-Fees
+        # exclusion as the Users pivot above, so it stays consistent with
+        # whatever Total Users this same table is already showing.
+        u_scope = dp.exclude_platform_fees(df_scope) if _business_line_in_view else df_scope
+        u_ = p_ if base_value_type == "Users" else dp.pivot_period_metric(u_scope, "Users")
+        arpu_ = dp.safe_divide_series(r_["Total"], u_["Total"]).rename("ARPU").to_frame()
+        return p_, p_pct, a_, p_pct.join(a_named, how="left").join(arpu_, how="left")
 
     pv, pv_pct, aov_pv, combined = _compute_combined(period_metric_filtered)
 
@@ -2039,9 +2312,13 @@ def render_period_metric_tab(tab_title, value_type, view_label):
     base_cols = ["Total", "New", "Repeat"]
     pct_cols = {"New %", "Repeat %"}
     aov_cols = ["AOV Total", "AOV New", "AOV Repeat"]
-    currency_cols = (set(base_cols) if value_type == "Revenue" else set()) | set(aov_cols)
+    arpu_cols = ["ARPU"]
+    currency_cols = (set(base_cols) if value_type == "Revenue" else set()) | set(aov_cols) | set(arpu_cols)
     columns = list(combined.columns)
-    groups = [(base_cols, dp.BLUE_HEATMAP_CMAP), (list(pct_cols), dp.GREEN_HEATMAP_CMAP), (aov_cols, dp.VIOLET_HEATMAP_CMAP)]
+    groups = [
+        (base_cols, dp.BLUE_HEATMAP_CMAP), (list(pct_cols), dp.GREEN_HEATMAP_CMAP),
+        (aov_cols, dp.VIOLET_HEATMAP_CMAP), (arpu_cols, dp.TEAL_HEATMAP_CMAP),
+    ]
 
     def sub_df_fn(cat):
         if pm_secondary_dim:
@@ -2147,8 +2424,13 @@ def render_contribution_tab(tab_title, value_type, component, breakdown_col, fix
             if breakdown_col == "cm_business_line":
                 bcols = dp.order_with_priority(bcols, dp.DIMENSION_PRIORITY.get("cm_business_line", []))
             pv = dp.compute_aov(num_pv.reindex(columns=bcols), den_pv.reindex(columns=bcols))
+            # ARPU's Users denominator: exclude Platform Fees from the TRUE total (it's
+            # not a real business line, so its users shouldn't be double-counted into
+            # the combined total) while each business line's/platform's own bucket
+            # above — including Platform Fees' own column, if it is one — stays as-is.
+            den_scope = dp.exclude_platform_fees(df_scope) if value_type == "ARPU" else df_scope
             true_ratio = dp.safe_divide_series(
-                dp.true_period_total(df_scope, num_col), dp.true_period_total(df_scope, den_col),
+                dp.true_period_total(df_scope, num_col), dp.true_period_total(den_scope, den_col),
             )
             pv_total = pv.copy()
             pv_total.insert(0, "Total", true_ratio.reindex(pv_total.index))
@@ -2162,7 +2444,12 @@ def render_contribution_tab(tab_title, value_type, component, breakdown_col, fix
         # "Total" is the true, dimension-agnostic period total (see true_period_total's
         # docstring) — not just the sum of the named buckets, which would silently
         # shrink whenever some revenue's breakdown_col happens to be untagged.
-        true_total = dp.true_period_total(df_scope, value_col)
+        # For Users specifically, also exclude Platform Fees from that true total —
+        # it isn't a real business line, so its users would double-count against
+        # whichever real business line the purchase actually belongs to. Each
+        # business line's/platform's own bucket column above is left untouched.
+        total_scope = dp.exclude_platform_fees(df_scope) if value_type == "Users" else df_scope
+        true_total = dp.true_period_total(total_scope, value_col)
         pv_total = pv.copy()
         pv_total.insert(0, "Total", true_total.reindex(pv_total.index))
         pv_show = dp.to_contribution_pct(pv_total, bcols) if local_is_pct else pv_total
@@ -2333,7 +2620,12 @@ elif active_tab == "Purchases":
 # ------------------------------------------------------------------ AOV tab ---
 elif active_tab == "AOV":
     st.caption("AOV is always shown in absolute terms — the Repeat Rate % toggle does not apply here.")
-    render_cohort_tab(None, "AOV", is_pct=False, currency=True, aov_mode=True)
+    render_cohort_tab(None, "AOV", is_pct=False, currency=True, ratio_denom="purchases")
+
+# ----------------------------------------------------------------- ARPU tab ---
+elif active_tab == "ARPU":
+    st.caption("ARPU is always shown in absolute terms — the Repeat Rate % toggle does not apply here.")
+    render_cohort_tab(None, "ARPU", is_pct=False, currency=True, ratio_denom="users")
 
 # --------------------------------------------------------------- Recency tab ---
 elif active_tab == "Recency":

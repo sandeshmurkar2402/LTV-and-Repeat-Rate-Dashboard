@@ -27,17 +27,22 @@ COHORT_LABELS = {
     "M10": "M10", "M11": "M11", "M12": "M12", "M12plus": "M12+",
 }
 NEW_ACQ_LABEL = COHORT_LABELS["enrolled_users"]  # short table-column header for enrolled_users
-DIMENSION_COLS = ["acq_business_line", "acq_platform", "cm_business_line", "fo_val_buc"]
-# acq_platform ordered before cm_business_line here (not alphabetical/schema
-# order) specifically so Cross Sales (Platform x Acq BL)'s 3-level outline
-# expands Acq BL -> Acq Platform -> CM Business Line, per request — this is
-# the only current metric with all 3 of these active at once (Cross_Sell only
-# ever has acq_business_line + cm_business_line active, so it's unaffected by
-# this ordering).
+DIMENSION_COLS = ["acq_business_line", "acq_platform", "cm_business_line", "platform", "fo_val_buc"]
+# acq_platform ordered before cm_business_line, and platform ("CM Platform")
+# after it, here (not alphabetical/schema order) specifically so Cross Sales
+# (Platform x Acq BL)'s row outline expands Acq BL -> Acq Platform -> CM
+# Business Line -> CM Platform, per request — this is the only current metric
+# with all 4 of these active at once (Cross_Sell only ever has
+# acq_business_line + cm_business_line active, so it's unaffected by this
+# ordering). The raw sheet's own "platform" column — distinct from
+# "acq_platform" — was populated with real per-row values alongside
+# cm_business_line; it's the platform the CM/repeat-side transaction happened
+# on, the same way cm_business_line is the repeat-side business line.
 DIMENSION_LABELS = {
     "acq_business_line": "Acquisition Business Line",
     "cm_business_line": "CM Business Line",
     "acq_platform": "Acquisition Platform",
+    "platform": "CM Platform",
     "fo_val_buc": "FO Value Bucket",
 }
 METRIC_LABELS = {
@@ -120,6 +125,12 @@ def build_repeat_df(raw_values) -> pd.DataFrame:
             df[c] = _to_num(df[c])
     df["period"] = pd.to_datetime(df["period"], errors="coerce")
     df["acq_platform"] = df["acq_platform"].replace({"[NULL]": "Unknown"})
+    if "platform" in df.columns:
+        # Same treatment as acq_platform above — without this, platform's
+        # (CM Platform's) "[NULL]" rows would just be silently dropped by
+        # unique_options() instead of surfacing as a real, filterable
+        # "Unknown" category the way Acquisition Platform's already do.
+        df["platform"] = df["platform"].replace({"[NULL]": "Unknown"})
     df = df.dropna(subset=["period"])
     return df
 
@@ -184,7 +195,22 @@ CROSS_SELL_METRICS = {"Cross_Sell", "Platforwise_Acq_BL_Repeat_Rate"}
 # New-users denominator no longer double-counts across cm_business_line types.
 
 
-def with_acq_line_enrolled(df: pd.DataFrame, filtered: pd.DataFrame, metric: str, acq_business_line) -> pd.DataFrame:
+PLATFORM_SELF_MATCH_METRICS = {"Platforwise_Acq_BL_Repeat_Rate"}
+# Platforwise_Acq_BL_Repeat_Rate's enrolled_users rows ALSO self-match
+# platform == acq_platform (the same "self" pattern as cm_business_line ==
+# acq_business_line, just on the platform pair instead of the business-line
+# pair — verified directly against the sheet: for a given acq_business_line/
+# period, the correctly cm_business_line-self-matched enrolled_users rows
+# still had one row per acq_platform, each with platform == that same
+# acq_platform). Without also self-matching on this pair, drilling into one
+# specific Acquisition Platform (or CM Platform) still summed the New/
+# enrolled_users total across every platform, showing the exact same
+# (too-large) "New" value on every Acq Platform / CM Platform sub-row instead
+# of that platform's own count. Cross_Sell has no platform breakdown at all,
+# so it's unaffected by this — scoped to this one metric.
+
+
+def with_acq_line_enrolled(df: pd.DataFrame, filtered: pd.DataFrame, metric: str, acq_business_line, acq_platform=None) -> pd.DataFrame:
     """Cross_Sell's 'enrolled_users' row is tagged per cm_business_line ('type'), so
     filtering to one specific type (as the M0-M12+ numerator does) leaves most months
     with no enrolled_users row at all. The denominator should instead be that same
@@ -193,18 +219,31 @@ def with_acq_line_enrolled(df: pd.DataFrame, filtered: pd.DataFrame, metric: str
     for that acq line (that double-counts: e.g. Group Offline, Jun-2026 was giving 310
     = 307 (Group Offline) + 3 (Group Online) + 0 (Platform Fees) instead of the correct
     307). acq_business_line may be a single value or a list — with multiple acq lines
-    selected, each contributes its own self-matched row, summed together."""
+    selected, each contributes its own self-matched row, summed together.
+
+    acq_platform (only meaningful for PLATFORM_SELF_MATCH_METRICS) narrows the same
+    way — a single value when a specific Acquisition Platform (or, since they're
+    always fixed together, CM Platform) sub-row is being drilled into, or the
+    currently-checked list from the filter picker otherwise; omitted (None) sums
+    across every platform, matching the un-narrowed aggregate/total row."""
     if metric not in CROSS_SELL_METRICS or not acq_business_line:
         return filtered
     acq_lines = acq_business_line if isinstance(acq_business_line, (list, tuple, set)) else [acq_business_line]
     if not acq_lines:
         return filtered
-    enrolled_rows = df[
+    mask = (
         (df["metric"] == metric)
         & (df["acq_business_line"].isin(acq_lines))
         & (df["cm_business_line"] == df["acq_business_line"])
         & (df["months_since_acq_buc"] == "enrolled_users")
-    ]
+    )
+    if metric in PLATFORM_SELF_MATCH_METRICS:
+        mask = mask & (df["platform"] == df["acq_platform"])
+        if acq_platform:
+            acq_platforms = acq_platform if isinstance(acq_platform, (list, tuple, set)) else [acq_platform]
+            if acq_platforms:
+                mask = mask & df["acq_platform"].isin(acq_platforms)
+    enrolled_rows = df[mask]
     if enrolled_rows.empty:
         return filtered
     summed = enrolled_rows.groupby("period", as_index=False)[NUMERIC_COLS].sum()
@@ -329,6 +368,22 @@ def true_period_total(df_filtered: pd.DataFrame, value_col: str) -> pd.Series:
     Purchase Month revenue by ~₹350k when broken down by platform specifically,
     versus the same period's true, business-line-agnostic total)."""
     return df_filtered.groupby("period")[value_col].sum().sort_index()
+
+
+def exclude_platform_fees(df: pd.DataFrame) -> pd.DataFrame:
+    """Platform Fees isn't a real business line — it's an extra charge tacked onto a
+    purchase that already belongs to some other (real) business line. A user counted
+    there would be counted AGAIN if Platform Fees' own rows were included when
+    summing Users across multiple business lines into a combined total, so this
+    scope must be excluded before that kind of sum. Revenue/Purchases/AOV are
+    unaffected and must never be passed through this.
+    If df is ENTIRELY Platform Fees rows (e.g. a scope already isolated to just that
+    one line item), excluding would leave nothing — return df unchanged so that
+    line item's own real value still displays instead of a false zero."""
+    if "cm_business_line" not in df.columns:
+        return df
+    filtered = df[df["cm_business_line"] != "Platform Fees"]
+    return filtered if not filtered.empty else df
 
 
 def format_table(disp: pd.DataFrame, pct_cols: set | None = None, currency_cols: set | None = None) -> pd.DataFrame:
