@@ -2414,20 +2414,32 @@ def render_contribution_tab(tab_title, value_type, component, breakdown_col, fix
     local_is_pct = False if is_ratio else is_pct
     component_idx = {"Overall": 0, "New": 1, "Repeat": 2}[component]
 
+    # Each bucket column is one value of breakdown_col. When that's
+    # cm_business_line (BL Contribution to Platform), a bucket already IS one
+    # specific business line — Platform Fees is legitimately one of those
+    # buckets and must keep showing its own real value. When it's platform
+    # (Platform Contribution to BL), a bucket (e.g. WEB) spans EVERY business
+    # line tagged with that platform — just as much a multi-business-line
+    # aggregate as the "Total" column — so it needs the same Platform Fees
+    # exclusion for Users/ARPU, or a platform's own bucket silently keeps
+    # double-counting even after the "Total" column was fixed.
+    bucket_needs_exclusion = breakdown_col == "platform"
+
     def _compute_pivot(df_scope):
         if is_ratio:
             num_col = dp.PERIOD_METRIC_SOURCE_COLS["Revenue"][component_idx]
             den_col = dp.PERIOD_METRIC_SOURCE_COLS["Purchases" if value_type == "AOV" else "Users"][component_idx]
             num_pv = dp.pivot_by_dimension(df_scope, breakdown_col, num_col)
-            den_pv = dp.pivot_by_dimension(df_scope, breakdown_col, den_col)
+            den_bucket_scope = (
+                dp.exclude_platform_fees(df_scope) if (bucket_needs_exclusion and value_type == "ARPU") else df_scope
+            )
+            den_pv = dp.pivot_by_dimension(den_bucket_scope, breakdown_col, den_col)
             bcols = sorted(set(num_pv.columns) | set(den_pv.columns))
             if breakdown_col == "cm_business_line":
                 bcols = dp.order_with_priority(bcols, dp.DIMENSION_PRIORITY.get("cm_business_line", []))
             pv = dp.compute_aov(num_pv.reindex(columns=bcols), den_pv.reindex(columns=bcols))
-            # ARPU's Users denominator: exclude Platform Fees from the TRUE total (it's
-            # not a real business line, so its users shouldn't be double-counted into
-            # the combined total) while each business line's/platform's own bucket
-            # above — including Platform Fees' own column, if it is one — stays as-is.
+            # ARPU's Users denominator for the "Total" column: exclude Platform Fees
+            # from the TRUE total the same way.
             den_scope = dp.exclude_platform_fees(df_scope) if value_type == "ARPU" else df_scope
             true_ratio = dp.safe_divide_series(
                 dp.true_period_total(df_scope, num_col), dp.true_period_total(den_scope, den_col),
@@ -2437,7 +2449,10 @@ def render_contribution_tab(tab_title, value_type, component, breakdown_col, fix
             return pv_total, pv_total, bcols
         source_cols = dp.PERIOD_METRIC_SOURCE_COLS[value_type]  # (total_col, new_col, repeat_col)
         value_col = source_cols[component_idx]
-        pv = dp.pivot_by_dimension(df_scope, breakdown_col, value_col)
+        bucket_scope = (
+            dp.exclude_platform_fees(df_scope) if (bucket_needs_exclusion and value_type == "Users") else df_scope
+        )
+        pv = dp.pivot_by_dimension(bucket_scope, breakdown_col, value_col)
         bcols = list(pv.columns)
         bcols = dp.order_with_priority(bcols, dp.DIMENSION_PRIORITY.get("cm_business_line", [])) if breakdown_col == "cm_business_line" else sorted(bcols)
         pv = pv[bcols]
